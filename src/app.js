@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const connectDB = require("./config/database");
 const app = express();
@@ -5,7 +6,6 @@ const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const http = require("http");
 
-require("dotenv").config();
 
 require("./utils/cronjob");
 
@@ -26,6 +26,8 @@ const paymentRouter = require("./routes/payment");
 const initializeSocket = require("./utils/socket");
 const chatRouter = require("./routes/chat");
 
+
+
 app.use("/", authRouter);
 app.use("/", profileRouter);
 app.use("/", requestRouter);
@@ -39,10 +41,11 @@ initializeSocket(server);
 connectDB()
   .then(() => {
     console.log("Database connection established...");
-    server.listen(process.env.PORT, () => {
-      console.log("Server is successfully listening on port 7777...");
+    const PORT = process.env.PORT || 7777;
+    server.listen(PORT, () => {
+      console.log(`Server is successfully listening on port ${PORT}`);
     });
   })
   .catch((err) => {
-    console.error("Database cannot be connected!!");
+    console.error("Database cannot be connected!!",err);
   });
