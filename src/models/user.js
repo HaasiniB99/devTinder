@@ -26,15 +26,23 @@ const userSchema = new mongoose.Schema(
         }
       },
     },
+    isGoogleUser: {
+  type: Boolean,
+  default: false
+},
     password: {
-      type: String,
-      required: true,
-      validate(value) {
-        if (!validator.isStrongPassword(value)) {
-          throw new Error("Enter a Strong Password: " + value);
-        }
-      },
-    },
+  type: String,
+  required: function () {
+    return !this.isGoogleUser; // password required only for normal users
+  },
+  validate(value) {
+    if (this.isGoogleUser) return true; // skip validation for Google users
+
+    if (!validator.isStrongPassword(value)) {
+      throw new Error("Enter a Strong Password: " + value);
+    }
+  },
+},
     age: {
       type: Number,
       min: 18,

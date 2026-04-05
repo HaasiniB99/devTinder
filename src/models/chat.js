@@ -7,12 +7,26 @@ const messageSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    type: {
+      type: String,
+      enum: ["text", "image", "file"],
+      default: "text",
+    },
     text: {
       type: String,
       required: true,
     },
+    status: {
+    type: String,
+    enum: ["sent", "delivered", "seen"],
+    default: "sent",
   },
-  { timestamps: true }
+      createdAt: {
+      type: Date,
+      default: Date.now, 
+    },
+
+  },
 );
 
 const chatSchema = new mongoose.Schema({

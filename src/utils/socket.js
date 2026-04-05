@@ -14,51 +14,131 @@ const initializeSocket = (server) => {
   const io = socket(server, {
     cors: {
       origin: "http://localhost:5173",
+      methods: ["GET", "POST"],
+    credentials: true, // ✅ REQUIRED
     },
   });
 
   io.on("connection", (socket) => {
-    socket.on("joinChat", ({ firstName, userId, targetUserId }) => {
+    console.log("User connected",socket.id);
+
+    // ✅ JOIN ROOM
+    socket.on("joinChat", ({ userId, targetUserId }) => {
       const roomId = getSecretRoomId(userId, targetUserId);
-      console.log(firstName + " joined Room : " + roomId);
       socket.join(roomId);
+
+      console.log(`User ${userId} joined room ${roomId}`);
     });
 
-    socket.on(
-      "sendMessage",
-      async ({ firstName, lastName, userId, targetUserId, text }) => {
-        // Save messages to the database
-        try {
-          const roomId = getSecretRoomId(userId, targetUserId);
-          console.log(firstName + " " + text);
+    // ✅ TYPING
+    socket.on("typing", ({ userId, targetUserId }) => {
+      const roomId = getSecretRoomId(userId, targetUserId);
+      socket.to(roomId).emit("typing");
+    });
 
-          // TODO: Check if userId & targetUserId are friends
+    socket.on("stopTyping", ({ userId, targetUserId }) => {
+      const roomId = getSecretRoomId(userId, targetUserId);
+      socket.to(roomId).emit("stopTyping");
+    });
 
-          let chat = await Chat.findOne({
-            participants: { $all: [userId, targetUserId] },
-          });
+    // ✅ SEND MESSAGE (FIXED)
+    socket.on("sendMessage", async ({ userId, targetUserId, text, type }) => {
+  console.log("🔥 sendMessage triggered:", { userId, targetUserId, text, type });
 
-          if (!chat) {
-            chat = new Chat({
-              participants: [userId, targetUserId],
-              messages: [],
-            });
+  try {
+    const roomId = getSecretRoomId(userId, targetUserId);
+
+    // ✅ check connection
+    const connection = await ConnectionRequest.findOne({
+      $or: [
+        { fromUserId: userId, toUserId: targetUserId, status: "accepted" },
+        { fromUserId: targetUserId, toUserId: userId, status: "accepted" },
+      ],
+    });
+
+    if (!connection) return;
+
+    // ✅ find or create chat
+    let chat = await Chat.findOne({
+      participants: { $all: [userId, targetUserId] },
+    });
+
+    if (!chat) {
+      chat = new Chat({
+        participants: [userId, targetUserId],
+        messages: [],
+      });
+    }
+
+    // 🔥 UPDATED MESSAGE OBJECT
+    const message = {
+      senderId: userId,
+      text,
+      type: type || "text", // ✅ NEW
+      status: "sent",
+      createdAt: new Date(),
+    };
+
+    chat.messages.push(message);
+
+    await chat.save();
+
+    const savedMessage = chat.messages[chat.messages.length - 1];
+
+    // ✅ EMIT MESSAGE
+    io.to(roomId).emit("messageReceived", savedMessage);
+
+    // ✅ UPDATE STATUS → delivered
+    savedMessage.status = "delivered";
+
+    io.to(roomId).emit("messageStatusUpdate", {
+      messageId: savedMessage._id,
+      status: "delivered",
+    });
+
+  } catch (err) {
+    console.log(err);
+  }
+});
+
+    // ✅ MARK AS SEEN
+    socket.on("markAsSeen", async ({ userId, targetUserId }) => {
+      try {
+        const roomId = getSecretRoomId(userId, targetUserId);
+
+        const chat = await Chat.findOne({
+          participants: { $all: [userId, targetUserId] },
+        });
+
+        if (!chat) return;
+
+        let updated = false;
+
+        chat.messages.forEach((msg) => {
+          if (
+            msg.senderId.toString() === targetUserId &&
+            msg.status !== "seen"
+          ) {
+            msg.status = "seen";
+            updated = true;
           }
+        });
 
-          chat.messages.push({
-            senderId: userId,
-            text,
-          });
-
+        if (updated) {
           await chat.save();
-          io.to(roomId).emit("messageReceived", { firstName, lastName, text });
-        } catch (err) {
-          console.log(err);
         }
-      }
-    );
 
-    socket.on("disconnect", () => {});
+        io.to(roomId).emit("messagesSeen");
+
+      } catch (err) {
+        console.log(err);
+      }
+    });
+
+    // ✅ DISCONNECT
+    socket.on("disconnect", () => {
+      console.log("User disconnected");
+    });
   });
 };
 
