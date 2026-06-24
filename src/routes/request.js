@@ -52,7 +52,6 @@ requestRouter.post(
       //   "A new friend request from " + req.user.firstName,
       //   req.user.firstName + " is " + status + " in " + toUser.firstName
       // );
-      // console.log(emailRes);
 
       res.json({
         message:

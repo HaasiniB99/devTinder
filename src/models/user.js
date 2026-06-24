@@ -3,16 +3,26 @@ const validator = require("validator");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 
+const getInitialsAvatarUrl = (firstName = "User", lastName = "") => {
+  const name = `${firstName} ${lastName}`.trim() || "User";
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+    name
+  )}&background=111827&color=ffffff&bold=true&size=256`;
+};
+
 const userSchema = new mongoose.Schema(
   {
     firstName: {
       type: String,
       required: true,
-      minLength: 4,
+      minLength: 2,
       maxLength: 50,
+      trim: true,
     },
     lastName: {
       type: String,
+      default: "",
+      trim: true,
     },
     emailId: {
       type: String,
@@ -68,9 +78,9 @@ const userSchema = new mongoose.Schema(
     },
     photoUrl: {
       type: String,
-      default: "https://geographyandyou.com/images/user-profile.png",
+      default: "",
       validate(value) {
-        if (!validator.isURL(value)) {
+        if (value && !validator.isURL(value)) {
           throw new Error("Invalid Photo URL: " + value);
         }
       },
@@ -81,6 +91,70 @@ const userSchema = new mongoose.Schema(
     },
     skills: {
       type: [String],
+      default: [],
+    },
+    currentlyWorkingOn: {
+      type: String,
+      default: "",
+      trim: true,
+      maxLength: 200,
+    },
+    recentSkillsUsed: {
+      type: [String],
+      default: [],
+      validate: {
+        validator(value) {
+          return value.length <= 5;
+        },
+        message: "recentSkillsUsed cannot contain more than 5 items",
+      },
+      set(value) {
+        return Array.isArray(value) ? value.slice(-5) : value;
+      },
+    },
+    availableFor: {
+      type: [
+        {
+          type: String,
+          enum: [
+            "pair programming",
+            "code review",
+            "system design discussion",
+            "project collaboration",
+            "mentoring",
+            "being mentored",
+            "hackathon",
+            "just talking tech",
+          ],
+        },
+      ],
+      default: [],
+    },
+    primaryField: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    relatedFields: {
+      type: [String],
+      default: [],
+      validate: {
+        validator(value) {
+          return value.length <= 4;
+        },
+        message: "relatedFields cannot contain more than 4 items",
+      },
+      set(value) {
+        return Array.isArray(value) ? value.slice(0, 4) : value;
+      },
+    },
+    fieldLastAnalyzed: {
+      type: Date,
+      default: null,
+    },
+    lastActiveAt: {
+      type: Date,
+      default: Date.now,
     },
   },
   {
@@ -88,11 +162,18 @@ const userSchema = new mongoose.Schema(
   }
 );
 
+userSchema.pre("validate", function (next) {
+  if (!this.photoUrl) {
+    this.photoUrl = getInitialsAvatarUrl(this.firstName, this.lastName);
+  }
+  next();
+});
+
 userSchema.methods.getJWT = async function () {
   const user = this;
 
   const token = await jwt.sign({ _id: user._id }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
+    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
 
   return token;

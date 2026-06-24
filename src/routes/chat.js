@@ -1,6 +1,8 @@
 const express = require("express");
 const { userAuth } = require("../middlewares/auth");
-const { Chat } = require("../models/chat");
+const mongoose = require("mongoose");
+const { Chat, getChatParticipantKey } = require("../models/chat");
+const ConnectionRequest = require("../models/connectionRequest");
 
 const chatRouter = express.Router();
 
@@ -9,30 +11,52 @@ chatRouter.get("/chat/:targetUserId", userAuth, async (req, res) => {
   const userId = req.user._id;
 
   try {
+    if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+      return res.status(400).json({ message: "Invalid chat user" });
+    }
+
+    const connection = await ConnectionRequest.findOne({
+      status: "accepted",
+      $or: [
+        { fromUserId: userId, toUserId: targetUserId },
+        { fromUserId: targetUserId, toUserId: userId },
+      ],
+    }).select("_id");
+
+    if (!connection) {
+      return res.status(403).json({ message: "You can only chat with accepted connections" });
+    }
+
+    const participantKey = getChatParticipantKey(userId, targetUserId);
     let chat = await Chat.findOne({
-      participants: { $all: [userId, targetUserId] },
+      $or: [
+        { participantKey },
+        { participants: { $all: [userId, targetUserId] } },
+      ],
     });
 
-    // 🔥 create chat if not exists
     if (!chat) {
       chat = new Chat({
         participants: [userId, targetUserId],
+        participantKey,
         messages: [],
       });
       await chat.save();
+    } else if (!chat.participantKey) {
+      chat.participantKey = participantKey;
+      await chat.save();
     }
 
-    // 🔥 IMPORTANT: sort messages by time
+    const limit = Math.min(Number(req.query.limit) || 50, 100);
     const sortedMessages = chat.messages.sort(
       (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
-    );
+    ).slice(-limit);
 
-    // 🔥 send clean data (NO populate)
     res.json({ messages: sortedMessages });
 
   } catch (err) {
     console.error(err);
-    res.status(500).send("Error fetching chat");
+    res.status(500).json({ message: "Error fetching chat" });
   }
 });
 

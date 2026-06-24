@@ -1,10 +1,11 @@
 const express = require("express");
 const upload = require("../middlewares/upload");
 const cloudinary = require("../utils/cloudinary");
+const { userAuth } = require("../middlewares/auth");
 
 const router = express.Router();
 
-router.post("/", upload.single("file"), async (req, res) => {
+router.post("/", userAuth, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
@@ -19,11 +20,14 @@ router.post("/", upload.single("file"), async (req, res) => {
 
     res.json({
       url: result.secure_url,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      mimeType: req.file.mimetype,
+      resourceType: result.resource_type,
     });
   } catch (err) {
-    console.log(err);
     res.status(500).json({ message: "Upload failed" });
   }
 });
 
-module.exports = router; // ✅ CORRECT
+module.exports = router;

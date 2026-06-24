@@ -23,7 +23,7 @@ userRouter.get("/user/requests/received", userAuth, async (req, res) => {
       data: connectionRequests,
     });
   } catch (err) {
-    req.status(400).send("ERROR: " + err.message);
+    res.status(400).send("ERROR: " + err.message);
   }
 });
 
@@ -39,8 +39,6 @@ userRouter.get("/user/connections", userAuth, async (req, res) => {
     })
       .populate("fromUserId", USER_SAFE_DATA)
       .populate("toUserId", USER_SAFE_DATA);
-
-    console.log(connectionRequests);
 
     const data = connectionRequests.map((row) => {
       if (row.fromUserId._id.toString() === loggedInUser._id.toString()) {
@@ -90,4 +88,17 @@ userRouter.get("/feed", userAuth, async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 });
+
+// Get user by id (safe fields only) - used by frontend chat to load the target user
+userRouter.get('/user/:id', userAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id).select(USER_SAFE_DATA);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json(user);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
 module.exports = userRouter;
