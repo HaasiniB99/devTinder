@@ -20,8 +20,9 @@ const COOKIE_MAX_AGE_MS = Number(process.env.COOKIE_MAX_AGE_MS) || 7 * 24 * 60 *
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
-  sameSite: "lax",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
 };
+
 const AUTH_RATE_LIMIT = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
