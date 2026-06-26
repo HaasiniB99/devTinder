@@ -72,7 +72,7 @@ const getAiMatches = async (currentUser, query, candidates) => {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const fullPrompt = `${prompt.system}\n\n${prompt.user}`;
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
       const result = await model.generateContent(fullPrompt);
       const text = result.response.text();
       const cleanedText = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
