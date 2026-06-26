@@ -25,8 +25,9 @@ router.post("/", userAuth, upload.single("file"), async (req, res) => {
       mimeType: req.file.mimetype,
       resourceType: result.resource_type,
     });
-  } catch (err) {
-    res.status(500).json({ message: "Upload failed" });
+  }  catch (err) {
+    console.error("Upload error:", err);
+    res.status(500).json({ message: "Upload failed", error: err.message });
   }
 });
 
