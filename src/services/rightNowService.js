@@ -1,9 +1,9 @@
-const Anthropic = require("@anthropic-ai/sdk");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const ConnectionRequest = require("../models/connectionRequest");
 const RightNowMatch = require("../models/rightNowMatch");
 const User = require("../models/user");
 
-const client = new Anthropic();
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const ACTIVE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const CACHE_WINDOW_MS = 30 * 1000;
@@ -52,7 +52,7 @@ const getCachedResult = async (userId, query) => {
 };
 
 const buildPrompt = (query, candidates) => ({
-  system: `You are an open developer discovery engine. The user's search query is the sole matching intent: do not require it to relate to the searching user's skills, current work, availability, or profile. Find candidates whose shared profile information makes them useful, interesting, or relevant to exactly what the user asks for. A query can be about any technology, role, collaboration style, learning goal, or developer interest. Give practical suggestions only when their profile supports the suggestion. Each match reason must be one specific sentence explaining why that candidate fits the query; never use generic phrases such as "similar interests" or "both are developers". Return valid JSON only with no surrounding explanation.`,
+  system: `You are an open developer discovery engine. The user's search query is the sole matching intent: do not require it to relate to the searching user's skills, current work, availability, or profile. Interpret what the user is actually trying to accomplish, and match candidates based on that underlying intent rather than literal keyword overlap alone. For example, "people who know React to review my project" means the user wants someone who can help with React-related work, so prioritize candidates whose skills, current work, availability, or bio genuinely indicate React expertise or the ability to support that task. Exact or near-exact keyword matches to the query, such as a query mentioning React and a candidate listing React, are strong high-priority matches and should receive the highest relevance when supported by the profile. Also count synonyms, related technologies, and implied skills as valid matches even when the exact query keyword is absent; for a React query, Next.js, Redux, or React Native can imply relevant React knowledge, though these usually rank slightly below exact matches unless the profile makes their relevance especially strong. Reason about the query's underlying need, such as review, collaboration, mentorship, hiring, learning together, or developer interest, and weigh candidates by whether their shared profile information demonstrates the ability to fulfill that need, not just broad topical overlap. The candidate does not need to literally describe the requested role, such as "reviewer"; strong relevant experience is sufficient when it supports the user's need. Overall ranking priority is exact keyword or skill matches first, then strongly related or implied skills, then weaker topical relevance; use relevanceScore to reflect this ordering. Give practical suggestions only when their profile supports the suggestion. Each match reason must be one specific sentence explaining why that candidate fits the query; never use generic phrases such as "similar interests" or "both are developers". Return valid JSON only with no surrounding explanation.`,
   user: `Search query:
 ${query}
 
@@ -71,17 +71,12 @@ const getAiMatches = async (currentUser, query, candidates) => {
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const response = await client.messages.create({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 800,
-        system: prompt.system,
-        messages: [{ role: "user", content: prompt.user }],
-      });
-      const text = response.content
-        .filter((block) => block.type === "text")
-        .map((block) => block.text)
-        .join("");
-      const parsed = JSON.parse(text);
+      const fullPrompt = `${prompt.system}\n\n${prompt.user}`;
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const result = await model.generateContent(fullPrompt);
+      const text = result.response.text();
+      const cleanedText = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+      const parsed = JSON.parse(cleanedText);
 
       if (!Array.isArray(parsed)) {
         throw new Error("AI response was not an array");

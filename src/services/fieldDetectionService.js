@@ -1,5 +1,4 @@
 const OpenAI = require("openai");
-const ConnectionRequest = require("../models/connectionRequest");
 const FieldMatch = require("../models/fieldMatch");
 const User = require("../models/user");
 
@@ -279,22 +278,8 @@ const findFieldMatches = async (currentUser) => {
   const cachedMatches = await getCachedMatches(currentUser._id);
   if (cachedMatches) return cachedMatches;
 
-  const connections = await ConnectionRequest.find({
-    status: "accepted",
-    $or: [
-      { fromUserId: currentUser._id },
-      { toUserId: currentUser._id },
-    ],
-  }).select("fromUserId toUserId");
-
-  const excludedUserIds = new Set([currentUser._id.toString()]);
-  connections.forEach((connection) => {
-    excludedUserIds.add(connection.fromUserId.toString());
-    excludedUserIds.add(connection.toUserId.toString());
-  });
-
   const candidates = await User.find({
-    _id: { $nin: Array.from(excludedUserIds) },
+    _id: { $ne: currentUser._id },
   }).select(`_id ${SAFE_USER_FIELDS}`);
 
   const candidatesNeedingDetection = candidates
